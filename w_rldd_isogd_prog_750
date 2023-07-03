@@ -1,0 +1,189 @@
+CREATE OR REPLACE FUNCTION app_rest.w_rldd_isogd_prog_750(params jsonb)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+declare
+	obj app.objects%rowtype;
+	tbl_jsn jsonb[];
+	tbl_jsn_fields jsonb[];
+	xml_fields xml;
+	xml_fields_params xml;
+	xml_files xml;
+	trust_id text;
+	claim_id text;
+	res xml;
+	need_load text;
+	pers_name text;
+	trust_pers text;
+	card_ugd bigint;
+	val_tep text;
+	x_params xml;
+	teps record;
+	settingkey bigint;
+	isogd_objtype smallint;
+	itid smallint;
+	did bigint;
+	server_type boolean;
+	sviaz bigint[];
+	value_text text;
+	folder_id bigint;
+	did_zayvka bigint; 
+	docnum_r text;
+	docdate_r text;
+	did_750 bigint;
+	obj_zayvka smallint;
+	lod_obj smallint;
+	vid_obj text;
+begin
+	claim_id:=params->>'claim_id';
+	 
+	select s.object_type_id, s.id, c.prod
+	into obj_zayvka, did_zayvka, server_type
+	from app.objects s, app_rldd.claims c
+	where c.id = claim_id
+	and s.id = c.object_id;
+	raise info 'obj_zayvka=%', obj_zayvka;
+	raise info 'did_zayvka=%', did_zayvka;
+	if obj_zayvka in(641, 642)  then 
+		lod_obj:= 472;
+	else 
+		lod_obj:= 400;
+	end if;
+	select s.id 
+	into did
+	from app.objects s, app.c_obj_object t 
+	where s.object_type_id = lod_obj 
+	and t.master_id = did_zayvka
+	and t.slave_id = s.id;
+	raise info 'did=%', did;
+
+
+	select s.id 
+	into did_750
+	from app.objects s, app.c_obj_object t 
+	where s.object_type_id = 750 
+	and t.slave_id = did_zayvka
+	and t.master_id = s.id;
+	if did_750 is null then 
+		select p.object_id 
+		into did_750
+		from app.objtep p
+		where p.tep_id = 16652 
+		and p.val_v = claim_id;
+	end if;
+	raise info 'did_750=%', did_750;
+	select s.doc_num, to_char(s.doc_date, 'dd.mm.yyyy')
+	into docnum_r, docdate_r
+	from app.objects s
+	where s.id = did;
+	select s.id, s.object_type_id_to
+	into settingkey, isogd_objtype
+	from app_gs.isogd_create_settings s
+	where object_type_id_from = lod_obj;
+
+	if obj_zayvka in (641,642,845,637,533,638) then -- Мельник 20.01.23 По задаче Галочкина (UGD-630)
+		vid_obj := app.get_objtep(did_zayvka,13547);
+	end if;
+
+	--raise info 'settingkey=%', settingkey;
+	for teps in (select *  from app_gs.c_isogd_tep_tep
+	          where create_set_id_fk=settingkey)
+	loop 
+		if teps.options->>'link_objtype_id' is not null then 
+			sviaz:= app.get_objid_to_role(did_zayvka, (teps.options->>'link_objtype_id')::smallint);
+			--raise info 'sviaz=%', sviaz;
+			if sviaz is not null then 
+	 		select array_to_string(array_agg(ss.val), ', ')    		
+	 		into value_text
+	 		from(select distinct app.get_objtep(s.id,teps.tep_id_from) as val
+	    		from app.objects s
+	    		where s.id = any(sviaz))ss;
+			end if;
+		else 
+			value_text:= app.get_objtep(did_zayvka,teps.tep_id_from);
+		end if;
+		if value_text <> '' then 
+	  	x_params:=xmlconcat(x_params,xmlelement(name param, xmlelement(name xpath,'t_'||teps.tep_id_to),
+	          xmlelement(name value,value_text)));
+	  end if;
+	end loop;
+	if obj_zayvka is not null then 
+		select array_agg(to_jsonb(jsn.*)) 
+		into  tbl_jsn
+	 	from (
+		select t.key_claim,value_claim
+		from app_rldd.tbl_params (claim_id) t) jsn
+		where key_claim not in ('statuses','trustedPersons')
+		and key_claim not like ('%technicalProperties%');
+
+
+		select jsonb_object_keys((row.jsn_param->>'value_claim')::jsonb)
+		into trust_id
+		from (select jsn_param
+		from unnest(tbl_jsn) as jsn_param) row 
+		where row.jsn_param->>'key_claim'='trustedPersons';
+		trust_id:=coalesce(trust_id,'123');
+
+		with tbl_pers as (select row.jsn_param->>'key_claim' as key_claim, 
+						row.jsn_param->>'value_claim' as value_claim
+				from (select jsn_param
+				from unnest(tbl_jsn) as jsn_param) row 
+				where row.jsn_param->>'key_claim' in ('person_orgName','person_fio','trustedPersons_trustedPersonInfo_firstName','trustedPersons_trustedPersonInfo_surname','trustedPersons_trustedPersonInfo_middleName')
+				or row.jsn_param->>'key_claim' like '%trustedPersons%')
+		select coalesce((select value_claim from tbl_pers where key_claim='person_fio'),'')||
+			coalesce((select value_claim from tbl_pers where key_claim='person_orgName'),''),
+		coalesce((select value_claim from tbl_pers where replace(key_claim,'_'||trust_id,'')='trustedPersons_trustedPersonInfo_firstName'),'')||' '||
+			 coalesce((select value_claim from tbl_pers where replace(key_claim,'_'||trust_id,'')='trustedPersons_trustedPersonInfo_surname'),'')
+		into pers_name, trust_pers
+		from tbl_pers;
+		select xmlelement(name data_param,xmlagg(fild_arr))
+		into xml_fields_params
+		from (select xmlelement(name param,xmlelement(name value_claim,row.jsn_param->>'value_claim'), xmlelement(name key_claim,
+			replace(row.jsn_param->>'key_claim','_'||trust_id,''))) as fild_arr
+		from (select jsn_param
+		from unnest(tbl_jsn) as jsn_param) row 
+		where replace(row.jsn_param->>'key_claim','_'||trust_id,'') not in ('personsInfo_orgJuridicalAddress','trustedPersons_trustedPersonInfo_currIdentityDoc','trustedPersons_trustedPersonInfo','statuses','currStatus','trustedPersons','personsInfo')) rslt;
+
+	
+		select xmlelement(name data_param,xmlagg(fild_arr))
+		into xml_fields_params
+		from (select xmlelement(name param,xmlelement(name value_claim,row.jsn_param->>'value_claim'), xmlelement(name key_claim,
+			replace(row.jsn_param->>'key_claim','_'||trust_id,''))) as fild_arr
+		from (select jsn_param
+		from unnest(tbl_jsn) as jsn_param) row 
+		where replace(row.jsn_param->>'key_claim','_'||trust_id,'') not in ('personsInfo_orgJuridicalAddress','trustedPersons_trustedPersonInfo_currIdentityDoc','trustedPersons_trustedPersonInfo','statuses','currStatus','trustedPersons','personsInfo')) rslt;
+
+
+		select xmlelement(name data_file,xmlagg(files_arr))
+		into xml_files
+		from (select xmlelement(name file_inf,  
+			xmlelement(name id_file, file_id),
+			xmlelement(name filename, file_filename),
+			xmlelement(name sigfilename, sig_file_filename),
+			xmlelement(name sig_fileid, sig_file_id),
+			xmlelement(name foldername_from, folder_name_from),
+			xmlelement(name foldername, folder_name)) as files_arr
+		from (
+		select t.createdate,t.lastmodified,t.id,t.file_id,t.file_md5,t.file_filename,t.file_contenttype,t.file_length,t.sig_file_id,t.sig_file_md5,
+		t.sig_file_filename,t.sig_file_contenttype,t.sig_file_length, folder_name as folder_name_from,
+		'Документ, подлежащий регистрации'as folder_name
+		from app_rldd.tbl_files (claim_id, true) t 
+		where folder_name SIMILAR TO '(Разрешение на строительство_%|Внесение изменений в РС_%|Разрешение на ввод_%|Исправление технической ошибки в РС_%|Исправление технической ошибки в РВ_%|Внесение изменений в РВ_%)'
+		) fls) filearr; 
+	--raise info 'did=%', did;
+	end if;
+	res:=xmlelement(name rldd_isogd, xmlelement(name persname,pers_name),xmlelement(name trustpers,trust_pers),xmlelement(name load_isogd,need_load),xmlelement(name servertype,server_type), 
+					xmlelement(name claim_id,claim_id),xmlelement(name params ,x_params),xmlelement(name id_ugd,did),
+					xmlelement(name isogd_objtype,isogd_objtype),
+					xmlelement(name isogd_objtype_from,lod_obj),
+					xmlelement(name docnum,docnum_r),
+					xmlelement(name docdate,docdate_r),	
+					xmlelement(name did_750,did_750),
+					xmlelement(name vid_obj,vid_obj),
+					xml_fields_params,xml_fields,xml_files);
+	return res;
+	
+end;
+$function$
+;
