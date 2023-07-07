@@ -1,189 +1,1865 @@
-CREATE OR REPLACE FUNCTION app_rest.w_rldd_isogd_prog_750(params jsonb)
+CREATE OR REPLACE FUNCTION tmp.glr_few(params jsonb)
  RETURNS text
  LANGUAGE plpgsql
  SECURITY DEFINER
 AS $function$
 declare
-	obj app.objects%rowtype;
-	tbl_jsn jsonb[];
-	tbl_jsn_fields jsonb[];
-	xml_fields xml;
-	xml_fields_params xml;
-	xml_files xml;
-	trust_id text;
-	claim_id text;
-	res xml;
-	need_load text;
-	pers_name text;
-	trust_pers text;
-	card_ugd bigint;
-	val_tep text;
-	x_params xml;
-	teps record;
-	settingkey bigint;
-	isogd_objtype smallint;
-	itid smallint;
-	did bigint;
-	server_type boolean;
-	sviaz bigint[];
-	value_text text;
-	folder_id bigint;
-	did_zayvka bigint; 
-	docnum_r text;
-	docdate_r text;
-	did_750 bigint;
-	obj_zayvka smallint;
-	lod_obj smallint;
-	vid_obj text;
+
+    res         text;
+    tabl text;
+    itid        smallint;
+    table_row text;
+
+
+    obj_id_1 bigint;
+    tepid integer;
+    val_text text;
+
+    act integer;
+    v record;
+    row text;
+    r record;
+
+    row_2 text;
+    row_3 text;
+    row_4 text;
+    count integer;
+    count1 integer;
+    val_1 text;
+    forest_types text;
+    vval numeric;
+    lesn_array numeric array;
+    print integer;
+    val_text_1 text;
+    val_text_2 text;
+    val_text_3 text;
+    val_text_4 text;
+    val_text_5 text;
+    table_row_part text;
+    i integer;
 begin
-	claim_id:=params->>'claim_id';
-	 
-	select s.object_type_id, s.id, c.prod
-	into obj_zayvka, did_zayvka, server_type
-	from app.objects s, app_rldd.claims c
-	where c.id = claim_id
-	and s.id = c.object_id;
-	raise info 'obj_zayvka=%', obj_zayvka;
-	raise info 'did_zayvka=%', did_zayvka;
-	if obj_zayvka in(641, 642)  then 
-		lod_obj:= 472;
-	else 
-		lod_obj:= 400;
-	end if;
-	select s.id 
-	into did
-	from app.objects s, app.c_obj_object t 
-	where s.object_type_id = lod_obj 
-	and t.master_id = did_zayvka
-	and t.slave_id = s.id;
-	raise info 'did=%', did;
+    --raise exception 'временно заблокирован';
+    itid:=coalesce((params->>'itid')::smallint,491); --491
+    tepid:=coalesce((params->>'tepid')::integer, 8615); --8615
+    val_text :=coalesce((params->>'val_text'),'Шатурское');--Шатурское
+    print := coalesce((params->>'print')::integer, 0);
+    table_row:= '';
+    tabl:= '';
+    row_2 := '';
+    count:= 10;
+    count1:= 0;
 
 
-	select s.id 
-	into did_750
-	from app.objects s, app.c_obj_object t 
-	where s.object_type_id = 750 
-	and t.slave_id = did_zayvka
-	and t.master_id = s.id;
-	if did_750 is null then 
-		select p.object_id 
-		into did_750
-		from app.objtep p
-		where p.tep_id = 16652 
-		and p.val_v = claim_id;
-	end if;
-	raise info 'did_750=%', did_750;
-	select s.doc_num, to_char(s.doc_date, 'dd.mm.yyyy')
-	into docnum_r, docdate_r
-	from app.objects s
-	where s.id = did;
-	select s.id, s.object_type_id_to
-	into settingkey, isogd_objtype
-	from app_gs.isogd_create_settings s
-	where object_type_id_from = lod_obj;
 
-	if obj_zayvka in (641,642,845,637,533,638) then -- Мельник 20.01.23 По задаче Галочкина (UGD-630)
-		vid_obj := app.get_objtep(did_zayvka,13547);
-	end if;
+if params->>'act'= '2' then
+    /*  itid:=coalesce((params->>'itid')::smallint,491); --491
+        tepid:=coalesce((params->>'tepid')::integer, 8615); --8615
+        val_text :=coalesce((params->>'val_text'),'Шатурское');--Шатурское
+        print := coalesce((params->>'print')::integer, 0);
+        table_row:= '';
+        tabl:= '';
+        row_2 := '';
+        count:= 10;
+        count1:= 0;*/
 
-	--raise info 'settingkey=%', settingkey;
-	for teps in (select *  from app_gs.c_isogd_tep_tep
-	          where create_set_id_fk=settingkey)
-	loop 
-		if teps.options->>'link_objtype_id' is not null then 
-			sviaz:= app.get_objid_to_role(did_zayvka, (teps.options->>'link_objtype_id')::smallint);
-			--raise info 'sviaz=%', sviaz;
-			if sviaz is not null then 
-	 		select array_to_string(array_agg(ss.val), ', ')    		
-	 		into value_text
-	 		from(select distinct app.get_objtep(s.id,teps.tep_id_from) as val
-	    		from app.objects s
-	    		where s.id = any(sviaz))ss;
-			end if;
-		else 
-			value_text:= app.get_objtep(did_zayvka,teps.tep_id_from);
-		end if;
-		if value_text <> '' then 
-	  	x_params:=xmlconcat(x_params,xmlelement(name param, xmlelement(name xpath,'t_'||teps.tep_id_to),
-	          xmlelement(name value,value_text)));
-	  end if;
-	end loop;
-	if obj_zayvka is not null then 
-		select array_agg(to_jsonb(jsn.*)) 
-		into  tbl_jsn
-	 	from (
-		select t.key_claim,value_claim
-		from app_rldd.tbl_params (claim_id) t) jsn
-		where key_claim not in ('statuses','trustedPersons')
-		and key_claim not like ('%technicalProperties%');
+tabl:=tabl||'<table class="table-hover">
+            <thead>
+            <tr><th rowspan="4" align="center">Преобладающие древесные и кустарниковые породы</th>
+            <th rowspan="4" align="center">Возраст рубки</th>
+            <th align="center" colspan = "8">Площадь земель, занятых лесными насаждениями (покрытых лесной растительностью)</th>
+            <th align="center" colspan = "7">Общий запас насаждений</th>
+            <th align="center" rowspan="4">Общий средний прирост, тыс куб.м,  млн.куб.м</th>
+            <th align="center" rowspan="4">Средний возраст, лет</th>
+            </tr>
+            <tr><th align="center" rowspan="3">всего</th>
+            <th align="center" colspan = "7">в том числе по группам возраста лесных насаждений</th>
+            <th align="center" rowspan="3">всего</th>
+            <th align="center" colspan = "6">в том числе по группам возраста лесных насаждений</th></tr>
+            <tr><th align="center" colspan = "2">молодняки</th>
+            <th align="center" colspan = "2">средневозрастные</th>
+            <th align="center" rowspan="2">приспевающие</th>
+            <th align="center" rowspan="2">спелые и перестойные</th>
+            <th align="center" rowspan="2">в том числе перестойные</th>
+            <th align="center" colspan = "2">молодняки</th>
+            <th align="center" rowspan="2">средневозрастные</th>
+            <th align="center" rowspan="2">приспевающие</th>
+            <th align="center" rowspan="2">спелые и перестойные</th>
+            <th align="center" rowspan="2">в том числе перестойные</th></tr>
+            <tr><th align="center">1 класса</th>
+            <th align="center">2 класса</th>
+            <th align="center">всего</th>
+            <th align="center">в т.ч. включенные в расчет главного пользования</th>
+            <th align="center">1 класса</th>
+            <th align="center">2 класса</th>
+            </tr>
+            <tr>
+<th align="center">1</th><th align="center">2</th><th align="center">3</th><th align="center">4</th><th align="center">5</th><th align="center">6</th>
+<th align="center">7</th><th align="center">8</th><th align="center">9</th><th align="center">10</th><th align="center">11</th><th align="center">12</th>
+<th align="center">13</th><th align="center">14</th><th align="center">15</th><th align="center">16</th><th align="center">17</th><th align="center">18</th><th align="center">19</th>
+            </tr>
+            </thead>
+            <body><tr>
+                        <td colspan = "19"><h2>'||val_text||'</h2></td></tr>
+                        <tr><td colspan = "19"><h3>Защитные леса - всего<h3></td></tr>
+                        <tr><td colspan = "19">1.Основные лесообразующие породы</td></tr>';
 
 
-		select jsonb_object_keys((row.jsn_param->>'value_claim')::jsonb)
-		into trust_id
-		from (select jsn_param
-		from unnest(tbl_jsn) as jsn_param) row 
-		where row.jsn_param->>'key_claim'='trustedPersons';
-		trust_id:=coalesce(trust_id,'123');
-
-		with tbl_pers as (select row.jsn_param->>'key_claim' as key_claim, 
-						row.jsn_param->>'value_claim' as value_claim
-				from (select jsn_param
-				from unnest(tbl_jsn) as jsn_param) row 
-				where row.jsn_param->>'key_claim' in ('person_orgName','person_fio','trustedPersons_trustedPersonInfo_firstName','trustedPersons_trustedPersonInfo_surname','trustedPersons_trustedPersonInfo_middleName')
-				or row.jsn_param->>'key_claim' like '%trustedPersons%')
-		select coalesce((select value_claim from tbl_pers where key_claim='person_fio'),'')||
-			coalesce((select value_claim from tbl_pers where key_claim='person_orgName'),''),
-		coalesce((select value_claim from tbl_pers where replace(key_claim,'_'||trust_id,'')='trustedPersons_trustedPersonInfo_firstName'),'')||' '||
-			 coalesce((select value_claim from tbl_pers where replace(key_claim,'_'||trust_id,'')='trustedPersons_trustedPersonInfo_surname'),'')
-		into pers_name, trust_pers
-		from tbl_pers;
-		select xmlelement(name data_param,xmlagg(fild_arr))
-		into xml_fields_params
-		from (select xmlelement(name param,xmlelement(name value_claim,row.jsn_param->>'value_claim'), xmlelement(name key_claim,
-			replace(row.jsn_param->>'key_claim','_'||trust_id,''))) as fild_arr
-		from (select jsn_param
-		from unnest(tbl_jsn) as jsn_param) row 
-		where replace(row.jsn_param->>'key_claim','_'||trust_id,'') not in ('personsInfo_orgJuridicalAddress','trustedPersons_trustedPersonInfo_currIdentityDoc','trustedPersons_trustedPersonInfo','statuses','currStatus','trustedPersons','personsInfo')) rslt;
-
-	
-		select xmlelement(name data_param,xmlagg(fild_arr))
-		into xml_fields_params
-		from (select xmlelement(name param,xmlelement(name value_claim,row.jsn_param->>'value_claim'), xmlelement(name key_claim,
-			replace(row.jsn_param->>'key_claim','_'||trust_id,''))) as fild_arr
-		from (select jsn_param
-		from unnest(tbl_jsn) as jsn_param) row 
-		where replace(row.jsn_param->>'key_claim','_'||trust_id,'') not in ('personsInfo_orgJuridicalAddress','trustedPersons_trustedPersonInfo_currIdentityDoc','trustedPersons_trustedPersonInfo','statuses','currStatus','trustedPersons','personsInfo')) rslt;
 
 
-		select xmlelement(name data_file,xmlagg(files_arr))
-		into xml_files
-		from (select xmlelement(name file_inf,  
-			xmlelement(name id_file, file_id),
-			xmlelement(name filename, file_filename),
-			xmlelement(name sigfilename, sig_file_filename),
-			xmlelement(name sig_fileid, sig_file_id),
-			xmlelement(name foldername_from, folder_name_from),
-			xmlelement(name foldername, folder_name)) as files_arr
-		from (
-		select t.createdate,t.lastmodified,t.id,t.file_id,t.file_md5,t.file_filename,t.file_contenttype,t.file_length,t.sig_file_id,t.sig_file_md5,
-		t.sig_file_filename,t.sig_file_contenttype,t.sig_file_length, folder_name as folder_name_from,
-		'Документ, подлежащий регистрации'as folder_name
-		from app_rldd.tbl_files (claim_id, true) t 
-		where folder_name SIMILAR TO '(Разрешение на строительство_%|Внесение изменений в РС_%|Разрешение на ввод_%|Исправление технической ошибки в РС_%|Исправление технической ошибки в РВ_%|Внесение изменений в РВ_%)'
-		) fls) filearr; 
-	--raise info 'did=%', did;
-	end if;
-	res:=xmlelement(name rldd_isogd, xmlelement(name persname,pers_name),xmlelement(name trustpers,trust_pers),xmlelement(name load_isogd,need_load),xmlelement(name servertype,server_type), 
-					xmlelement(name claim_id,claim_id),xmlelement(name params ,x_params),xmlelement(name id_ugd,did),
-					xmlelement(name isogd_objtype,isogd_objtype),
-					xmlelement(name isogd_objtype_from,lod_obj),
-					xmlelement(name docnum,docnum_r),
-					xmlelement(name docdate,docdate_r),	
-					xmlelement(name did_750,did_750),
-					xmlelement(name vid_obj,vid_obj),
-					xml_fields_params,xml_fields,xml_files);
-	return res;
-	
+
+
+
+for r in(select distinct forest_type, ordering from app_rest.forest_reestr_square where forest_type is not null and ordering is not null order by ordering)
+loop
+
+    row = '';
+
+    select '<tr><td colspan = "19"><b>'||r.forest_type||'</b></td></tr>'
+    into row;
+
+    table_row:= table_row||row;
+
+
+    forest_types:= '';
+    forest_types := case when r.forest_type  = 'Твepдoлиcтвeнные' then 'Итoгo твepдoлиcтвeнныx'
+                          when r.forest_type  = 'Хвойные' then 'Итoгo хвoйныx'
+                          when r.forest_type  = 'Мягколиственные' then 'Итoгo мягколиственных'
+                          when r.forest_type  = '2. Прочие древесные породы' then 'Итого по прочим древесным породам'
+                          when r.forest_type  = '3. Кустарники' then 'Итого по кустарникам'
+                          else ''
+                          end;
+
+
+        for v in(   select distinct poroda
+                    from app_rest.forest_reestr_square s
+                     where s.forest_type = r.forest_type)
+        loop
+
+count := 1;
+
+
+
+    /*  select round(d.val/d.coun,1)
+        into count
+        from(
+        select count(s.id) as coun,
+               sum(coalesce(t.val_v::bigint,0)) as val
+                            from app.objtep t, app.objects s
+                            where t.tep_id = 8672
+                            and t.object_id = s.id
+                            and s.object_type_id = 503
+                            and exists(select 1 from app.objtep k where k.object_id = s.id and k.tep_id = 9213 and k.val_v = v.poroda)
+                            and exists(select 1 from app.v_c_obj_object w, app.objects d
+                                                    , app.v_c_obj_object u, app.objects y, app.objtep m
+                                                     where w.object_id = d.id and w.sviaz_id = s.id and d.object_type_id = 502
+                                                     and u.object_id = d.id and u.sviaz_id = y.id and y.object_type_id = 491
+                                                     and m.tep_id = 8614 and m.object_id = y.id and
+                                                     m.val_v = val_text
+                                       )
+        group by t.val_v
+        )d;
+*/
+
+
+
+            row := '';
+            select '<tr><td>'||g.tex||'</td><td></td>
+                            <td>'||g.sum_1 ||'</td>
+                            <td>'||g.s_mol_1||'</td>
+                            <td>'||g.s_mol_2||'</td>
+                            <td>'||g.s_sred||'</td>
+                            <td>'||g.s_sred_plus||'</td>
+                            <td>'||g.s_preuspev||'</td>
+                            <td>'||g.s_spel||'</td>
+                            <td>'||g.s_perest||'</td>
+                            <td>'||g.sum_2 ||'</td>
+                            <td>'||g.v_mol_1||'</td>
+                            <td>'||g.v_mol_2||'</td>
+                            <td>'||g.v_sred||'</td>
+                            <td>'||g.v_preus||'</td>
+                            <td>'||g.v_spel||'</td>
+                            <td>'||g.v_per||'</td>
+                            <td>'||g.de||'</td>
+                            <td>'||g.all||'</td>
+                            </tr>'
+            into row
+            from (
+                select v.poroda as tex
+                ,(f.s_mol_1 + f.s_mol_2 + f.s_sred + f.s_sred_plus + f.s_preuspev + f.s_spel) as  sum_1
+                ,f.s_mol_1
+                ,f.s_mol_2
+                ,f.s_sred
+                ,f.s_sred_plus
+                ,f.s_preuspev
+                ,f.s_spel
+                ,f.s_perest
+                ,(f.v_mol_1 + f.v_mol_2 + f.v_sred + f.v_preus + f.v_spel) as sum_2
+                ,f.v_mol_1
+                ,f.v_mol_2
+                ,f.v_sred
+                ,f.v_preus
+                ,f.v_spel
+                ,f.v_per
+                ,round(((f.v_mol_1 + f.v_mol_2 + f.v_sred + f.v_preus + f.v_spel)/count),1) as de
+                ,coalesce(count,1) as all
+            from
+            (
+
+                select coalesce(sum(a.square) filter (where a.group_age = 'Молодняки 1 класса'),0) as s_mol_1
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  s_mol_2
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные'),0) as s_sred
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные, включенные в расчет главного пользования'),0) as s_sred_plus
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Приспевающие'),0) as s_preuspev
+                    ,coalesce(sum(a.square) filter (where  a.group_age in( 'Спелые','Перестойные')),0) as s_spel
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Перестойные'),0) as s_perest
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 1 класса'),0) as v_mol_1
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  v_mol_2
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Средневозрастные'),0) as v_sred
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Приспевающие'),0) as v_preus
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Спелые'),0) as v_spel
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Перестойные'),0) as v_per
+                from app_rest.forest_reestr_square a
+                where a.lesn = val_text and v.poroda = a.poroda and a.group_age is not null and a.forest_type is not null
+            ) f) g;
+
+
+
+            table_row:= table_row||row;
+        end loop;
+
+        row_2 := '';
+
+        select '<tr>
+                        <td><b>'||forest_types||'</b></td>
+                        <td></td>
+                        <td>'||g.sum_1 ||'</td>
+                        <td>'||g.s_mol_1||'</td>
+                        <td>'||g.s_mol_2||'</td>
+                        <td>'||g.s_sred||'</td>
+                        <td>'||g.s_sred_plus||'</td>
+                        <td>'||g.s_preuspev||'</td>
+                        <td>'||g.s_spel||'</td>
+                        <td>'||g.s_perest||'</td>
+                        <td>'||g.sum_2 ||'</td>
+                        <td>'||g.v_mol_1||'</td>
+                        <td>'||g.v_mol_2||'</td>
+                        <td>'||g.v_sred||'</td>
+                        <td>'||g.v_preus||'</td>
+                        <td>'||g.v_spel||'</td>
+                        <td>'||g.v_per||'</td>
+                        <td>'||g.de||'</td>
+                        <td>'||g.all||'</td>
+                        </tr>'
+        into row_2
+        from (select (f.s_mol_1 + f.s_mol_2 + f.s_sred + f.s_sred_plus + f.s_preuspev + f.s_spel) as  sum_1
+                ,f.s_mol_1
+                ,f.s_mol_2
+                ,f.s_sred
+                ,f.s_sred_plus
+                ,f.s_preuspev
+                ,f.s_spel
+                ,f.s_perest
+                ,(f.v_mol_1 + f.v_mol_2 + f.v_sred + f.v_preus + f.v_spel) as sum_2
+                ,f.v_mol_1
+                ,f.v_mol_2
+                ,f.v_sred
+                ,f.v_preus
+                ,f.v_spel
+                ,f.v_per
+                ,0 as de
+                ,0 as all
+        from
+        (
+                select coalesce(sum(a.square) filter (where a.group_age = 'Молодняки 1 класса'),0) as s_mol_1
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  s_mol_2
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные'),0) as s_sred
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные, включенные в расчет главного пользования'),0) as s_sred_plus
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Приспевающие'),0) as s_preuspev
+                    ,coalesce(sum(a.square) filter (where  a.group_age in( 'Спелые','Перестойные')),0) as s_spel
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Перестойные'),0) as s_perest
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 1 класса'),0) as v_mol_1
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  v_mol_2
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Средневозрастные'),0) as v_sred
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Приспевающие'),0) as v_preus
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Спелые'),0) as v_spel
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Перестойные'),0) as v_per
+            from app_rest.forest_reestr_square a
+            where a.lesn = val_text and r.forest_type = a.forest_type and a.group_age is not null
+        )f) g;
+
+        table_row:= table_row||row_2;
+
+
+        if r.forest_type in('Мягколиственные') then
+            row_2 := '';
+            --Итого по 1 разделу
+            select '<tr><td>Итого по 1 разделу</td><td></td>
+                            <td>'||g.sum_1 ||'</td>
+                            <td>'||g.s_mol_1||'</td>
+                            <td>'||g.s_mol_2||'</td>
+                            <td>'||g.s_sred||'</td>
+                            <td>'||g.s_sred_plus||'</td>
+                            <td>'||g.s_preuspev||'</td>
+                            <td>'||g.s_spel||'</td>
+                            <td>'||g.s_perest||'</td>
+                            <td>'||g.sum_2 ||'</td>
+                            <td>'||g.v_mol_1||'</td>
+                            <td>'||g.v_mol_2||'</td>
+                            <td>'||g.v_sred||'</td>
+                            <td>'||g.v_preus||'</td>
+                            <td>'||g.v_spel||'</td>
+                            <td>'||g.v_per||'</td>
+                            <td>'||g.de||'</td>
+                            <td>'||g.all||'</td>
+                            </tr>'
+                into row_2
+                from (
+                    select (f.s_mol_1 + f.s_mol_2 + f.s_sred + f.s_sred_plus + f.s_preuspev + f.s_spel) as  sum_1
+                ,f.s_mol_1
+                ,f.s_mol_2
+                ,f.s_sred
+                ,f.s_sred_plus
+                ,f.s_preuspev
+                ,f.s_spel
+                ,f.s_perest
+                ,(f.v_mol_1 + f.v_mol_2 + f.v_sred + f.v_preus + f.v_spel) as sum_2
+                ,f.v_mol_1
+                ,f.v_mol_2
+                ,f.v_sred
+                ,f.v_preus
+                ,f.v_spel
+                ,f.v_per
+                ,0 as de
+                ,0 as all
+                from
+                (
+
+                select coalesce(sum(a.square) filter (where a.group_age = 'Молодняки 1 класса'),0) as s_mol_1
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  s_mol_2
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные'),0) as s_sred
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные, включенные в расчет главного пользования'),0) as s_sred_plus
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Приспевающие'),0) as s_preuspev
+                    ,coalesce(sum(a.square) filter (where  a.group_age in( 'Спелые','Перестойные')),0) as s_spel
+                    ,coalesce(sum(a.square) filter (where  a.group_age = 'Перестойные'),0) as s_perest
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 1 класса'),0) as v_mol_1
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  v_mol_2
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Средневозрастные'),0) as v_sred
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Приспевающие'),0) as v_preus
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Спелые'),0) as v_spel
+                    ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Перестойные'),0) as v_per
+                    ,0 as sum_vosv
+                    ,0 as cout_vosv
+                    from app_rest.forest_reestr_square a
+                    where a.lesn = val_text and a.forest_type in('Хвойные','Твepдoлиcтвeнные','Мягколиственные')
+                    and a.group_age is not null and a.forest_type is not null and a.poroda is not null
+
+                ) f) g;
+                table_row:= table_row||row_2;
+        end if;
+
+    end loop;
+
+    --Итог по всем разделам
+    row := '';
+    select '<tr><td>Итого по разделам 1+2+3</td><td></td>
+                    <td>'||g.sum_1 ||'</td>
+                    <td>'||g.s_mol_1||'</td>
+                    <td>'||g.s_mol_2||'</td>
+                    <td>'||g.s_sred||'</td>
+                    <td>'||g.s_sred_plus||'</td>
+                    <td>'||g.s_preuspev||'</td>
+                    <td>'||g.s_spel||'</td>
+                    <td>'||g.s_perest||'</td>
+                    <td>'||g.sum_2 ||'</td>
+                    <td>'||g.v_mol_1||'</td>
+                    <td>'||g.v_mol_2||'</td>
+                    <td>'||g.v_sred||'</td>
+                    <td>'||g.v_preus||'</td>
+                    <td>'||g.v_spel||'</td>
+                    <td>'||g.v_per||'</td>
+                    <td>'||g.de||'</td>
+                    <td>'||g.all||'</td>
+                    </tr>'
+    into row
+    from (
+        select v.poroda as tex
+        ,(f.s_mol_1 + f.s_mol_2 + f.s_sred + f.s_sred_plus + f.s_preuspev + f.s_spel) as  sum_1
+        ,f.s_mol_1
+        ,f.s_mol_2
+        ,f.s_sred
+        ,f.s_sred_plus
+        ,f.s_preuspev
+        ,f.s_spel
+        ,f.s_perest
+        ,(f.v_mol_1 + f.v_mol_2 + f.v_sred + f.v_preus + f.v_spel) as sum_2
+        ,f.v_mol_1
+        ,f.v_mol_2
+        ,f.v_sred
+        ,f.v_preus
+        ,f.v_spel
+        ,f.v_per
+        ,0 as unknow
+        ,0 as de
+        ,0 as all
+    from
+    (
+        select coalesce(sum(a.square) filter (where a.group_age = 'Молодняки 1 класса'),0) as s_mol_1
+            ,coalesce(sum(a.square) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  s_mol_2
+            ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные'),0) as s_sred
+            ,coalesce(sum(a.square) filter (where  a.group_age = 'Средневозрастные, включенные в расчет главного пользования'),0) as s_sred_plus
+            ,coalesce(sum(a.square) filter (where  a.group_age = 'Приспевающие'),0) as s_preuspev
+            ,coalesce(sum(a.square) filter (where  a.group_age in( 'Спелые','Перестойные')),0) as s_spel
+            ,coalesce(sum(a.square) filter (where  a.group_age = 'Перестойные'),0) as s_perest
+            ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 1 класса'),0) as v_mol_1
+            ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Молодняки 2 класса'),0) as  v_mol_2
+            ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Средневозрастные'),0) as v_sred
+            ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Приспевающие'),0) as v_preus
+            ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Спелые'),0) as v_spel
+            ,coalesce(sum(a.vydel) filter (where  a.group_age = 'Перестойные'),0) as v_per
+            ,0 as sum_vosv
+            ,0 as cout_vosv
+        from app_rest.forest_reestr_square a
+        where a.lesn = val_text and a.group_age is not null and a.forest_type is not null and poroda is not null
+    ) f) g;
+
+
+
+    table_row:= table_row||row;
+
+    tabl:=tabl||table_row||'</body></table>';
+
+    res:=tabl;
+
+elsif params->>'act'= '5' then
+        itid:=coalesce((params->>'itid')::smallint,491); --491
+        tepid:=coalesce((params->>'tepid')::integer, 8615); --8615
+        val_text :=coalesce((params->>'val_text'),'Шатурское');--Шатурское
+
+table_row:= '';
+tabl:= '';
+row_2 := '';
+count:= 10;
+count1:= 0;
+tabl:=tabl||'<table class="table-hover">
+            <thead>
+            <tr><th rowspan="3" align="center">Группы возраста и полноты</th>
+            <th rowspan="3" align="center">Код строки</th>
+            <th align="center" colspan = "18">Площади лесных насаждений по группам пород и классам бонитета, га  (тыс. га )</th></tr>
+            <tr><th align="center" colspan = "6">хвойные</th>
+            <th align="center" colspan = "6">твердолиственные</th>
+            <th align="center" colspan = "6">мягколиственные</th></tr>
+            <tr><th align="center">II и выше</th>
+            <th align="center">III</th>
+            <th align="center">IV</th>
+            <th align="center">V</th>
+            <th align="center">VА-VБ</th>
+            <th align="center">итог</th>
+            <th align="center">II и выше</th>
+            <th align="center">III</th>
+            <th align="center">IV</th>
+            <th align="center">V</th>
+            <th align="center">VА-VБ</th>
+            <th align="center">итог</th>
+            <th align="center">II и выше</th>
+            <th align="center">III</th>
+            <th align="center">IV</th>
+            <th align="center">V</th>
+            <th align="center">VА-VБ</th>
+            <th align="center">итог</th></tr>
+            <tr><th align="center">А</th>
+            <th align="center">Б</th>
+<th align="center">1</th><th align="center">2</th><th align="center">3</th><th align="center">4</th><th align="center">5</th><th align="center">6</th>
+<th align="center">7</th><th align="center">8</th><th align="center">9</th><th align="center">10</th><th align="center">11</th><th align="center">12</th>
+<th align="center">13</th><th align="center">14</th><th align="center">15</th><th align="center">16</th><th align="center">17</th><th align="center">18</th>
+            </tr>
+            </thead>
+            <body><tr>
+                        <td>'||val_text||'</td><td colspan = "19"></td>';
+
+count1 := 10;
+
+for r in(select d.text as val_t, d.id from app.classifier_data d where class_id = 1257 order by d.id)
+loop
+
+    if r.val_t = 'Спелые' then
+             val_1 = 'Спелые и перестойные';
+        else val_1 = r.val_t;
+    end if;
+
+    row_2:= '';
+    select '<tr><td>'||val_1||'</td><td colspan = "19"></td>' into row_2;
+    table_row:=table_row||row_2;
+
+select array[0.400000,0.500000,0.600000,0.700000,0.800000,0.900000,1.000000]
+ into lesn_array;
+
+foreach vval in array lesn_array
+    /*for v in(select t.val_n as val from app.objtep t where t.tep_id =8680
+        and t.val_n in(0.400000,0.500000,0.600000,0.700000,0.800000,0.900000,1.000000) order by t.val_n )*/
+    loop
+        row := '';
+raise info 'vval=%',vval;
+        select '<tr>
+                        <td>'||vval||'</td>
+                        <td>'||count1||'</td>
+                        <td>'||sum_table.count_1||'</td>
+                        <td>'||sum_table.count_2||'</td>
+                        <td>'||sum_table.count_3||'</td>
+                        <td>'||sum_table.count_4||'</td>
+                        <td>'||sum_table.count_5||'</td>
+                        <td>'||sum_table.count_6||'</td>
+                        <td>'||sum_table.count_7||'</td>
+                        <td>'||sum_table.count_8||'</td>
+                        <td>'||sum_table.count_9||'</td>
+                        <td>'||sum_table.count_10||'</td>
+                        <td>'||sum_table.count_11||'</td>
+                        <td>'||sum_table.count_12||'</td>
+                        <td>'||sum_table.count_13||'</td>
+                        <td>'||sum_table.count_14||'</td>
+                        <td>'||sum_table.count_15||'</td>
+                        <td>'||sum_table.count_16||'</td>
+                        <td>'||sum_table.count_17||'</td>
+                        <td>'||sum_table.count_18||'</td></tr>'
+        into row
+        from (
+            select
+                t_8650
+                ,t_9989
+                ,count_1
+                ,count_2
+                ,count_3
+                ,count_4
+                ,count_5
+                ,count_6
+                ,count_7
+                ,count_8
+                ,count_9
+                ,count_10
+                ,count_11
+                ,count_12
+                ,count_13
+                ,count_14
+                ,count_15
+                ,count_16
+                ,count_17
+                ,count_18
+                from app_rest.forest_reestr
+                where t_8650 = val_text and t_8680 = vval and (
+                                                                (t_9989 = val_1 and val_1 in('Молодняки 1 класса','Молодняки 2 класса','Средневозрастные','Приспевающие'))
+                                                                or (val_1 = 'Спелые и перестойные' and t_9989 in('Спелые','Перестойные')
+                                                                ))
+                union all
+                select '0' as t_8650
+                ,r.val_t as t_9989
+                ,0 as count_1
+                ,0 as count_2
+                ,0 as count_3
+                ,0 as count_4
+                ,0 as count_5
+                ,0 as count_6
+                ,0 as count_7
+                ,0 as count_8
+                ,0 as count_9
+                ,0 as count_10
+                ,0 as count_11
+                ,0 as count_12
+                ,0 as count_13
+                ,0 as count_14
+                ,0 as count_15
+                ,0 as count_16
+                ,0 as count_17
+                ,0 as count_18
+                where not exists(select 1 from app_rest.forest_reestr
+                where t_8650 = val_text and t_8680 = vval and  (
+                                                                (t_9989 = val_1 and val_1 in('Молодняки 1 класса','Молодняки 2 класса','Средневозрастные','Приспевающие'))
+                                                                or (val_1 = 'Спелые и перестойные' and t_9989 in('Спелые','Перестойные'))))
+
+            ) as sum_table;
+
+
+
+    table_row:=table_row||row;
+
+    count1 := count1+1;
+
+    end loop;
+
+
+
+
+    row_3:= '';
+    select '<tr><td>Итог</td>'
+        '<td>'||count1||'</td>'
+        '<td>'||d.c1||'</td>'
+        '<td>'||d.c2||'</td>'
+        '<td>'||d.c3||'</td>'
+        '<td>'||d.c4||'</td>'
+        '<td>'||d.c5||'</td>'
+        '<td>'||d.c6||'</td>'
+        '<td>'||d.c7||'</td>'
+        '<td>'||d.c8||'</td>'
+        '<td>'||d.c9||'</td>'
+        '<td>'||d.c10||'</td>'
+        '<td>'||d.c11||'</td>'
+        '<td>'||d.c12||'</td>'
+        '<td>'||d.c13||'</td>'
+        '<td>'||d.c14||'</td>'
+        '<td>'||d.c15||'</td>'
+        '<td>'||d.c16||'</td>'
+        '<td>'||d.c17||'</td>'
+        '<td>'||d.c18||'</td>'
+        into row_3
+        from
+        (
+select coalesce(sum(count_1),0) as c1--as count_1
+                    ,coalesce(sum(count_2),0)   c2--as count_2
+                    ,coalesce(sum(count_3),0)   c3--as count_3
+                    ,coalesce(sum(count_4),0)   c4--as count_4
+                    ,coalesce(sum(count_5),0)   c5--as count_5
+                    ,coalesce(sum(count_6),0)   c6--as count_6
+                    ,coalesce(sum(count_7),0)   c7--as count_7
+                    ,coalesce(sum(count_8),0)   c8--as count_8
+                    ,coalesce(sum(count_9),0)   c9--as count_9
+                    ,coalesce(sum(count_10),0)  c10--as count_10
+                    ,coalesce(sum(count_11),0)  c11--as count_11
+                    ,coalesce(sum(count_12),0)  c12--as count_12
+                    ,coalesce(sum(count_13),0)  c13--as count_13
+                    ,coalesce(sum(count_14),0)  c14--as count_14
+                    ,coalesce(sum(count_15),0)  c15--as count_15
+                    ,coalesce(sum(count_16),0)  c16--as count_16
+                    ,coalesce(sum(count_17),0)  c17--as count_17
+                    ,coalesce(sum(count_18),0)  c18--as count_18
+            from app_rest.forest_reestr
+            where t_8650 = val_text  and t_9989 = r.val_t and t_9989 is not null and t_8680 is not null
+                --) d
+        )as d;
+        table_row:= table_row||row_3;
+
+
+
+end loop;
+
+
+row_4:= '';
+
+select '<tr><td>Всего</td><td colspan = "19"></td>'
+        '<tr><td>0.3-0.4</td><td>'||count1+1||'</td>'
+        '<td>'||c44||'</td><td>'||c45||'</td><td>'||c46||'</td><td>'||c47||'</td><td>'||c48||'</td><td>'||c49||'</td><td>'||c450||'</td><td>'||c451||'</td>'
+        '<td>'||c452||'</td><td>'||c453||'</td><td>'||c454||'</td><td>'||c455||'</td><td>'||c456||'</td><td>'||c457||'</td><td>'||c458||'</td><td>'||c459||'</td>'
+        '<td>'||c460||'</td><td>'||c461||'</td>'
+         '<tr><td>0.5</td><td>'||count1+2||'</td>'
+        '<td>'||d44||'</td><td>'||d45||'</td><td>'||d46||'</td><td>'||d47||'</td><td>'||d48||'</td><td>'||d49||'</td><td>'||d450||'</td><td>'||d451||'</td>'
+        '<td>'||d452||'</td><td>'||d453||'</td><td>'||d454||'</td><td>'||d455||'</td><td>'||d456||'</td><td>'||d457||'</td><td>'||d458||'</td><td>'||d459||'</td>'
+        '<td>'||d460||'</td><td>'||d461||'</td>'
+        '<tr><td>0.6</td><td>'||count1+3||'</td>'
+        '<td>'||f44||'</td><td>'||f45||'</td><td>'||f46||'</td><td>'||f47||'</td><td>'||f48||'</td><td>'||f49||'</td><td>'||f450||'</td><td>'||f451||'</td>'
+        '<td>'||f452||'</td><td>'||f453||'</td><td>'||f454||'</td><td>'||f455||'</td><td>'||f456||'</td><td>'||f457||'</td><td>'||f458||'</td><td>'||f459||'</td>'
+        '<td>'||f460||'</td><td>'||f461||'</td>'
+        '<tr><td>0.7</td><td>'||count1+4||'</td>'
+        '<td>'||g44||'</td><td>'||g45||'</td><td>'||g46||'</td><td>'||g47||'</td><td>'||g48||'</td><td>'||g49||'</td><td>'||g450||'</td><td>'||g451||'</td>'
+        '<td>'||g452||'</td><td>'||g453||'</td><td>'||g454||'</td><td>'||g455||'</td><td>'||g456||'</td><td>'||g457||'</td><td>'||g458||'</td><td>'||g459||'</td>'
+        '<td>'||g460||'</td><td>'||g461||'</td>'
+        '<tr><td>0.8</td><td>'||count1+5||'</td>'
+        '<td>'||h44||'</td><td>'||h45||'</td><td>'||h46||'</td><td>'||h47||'</td><td>'||h48||'</td><td>'||h49||'</td><td>'||h450||'</td><td>'||h451||'</td>'
+        '<td>'||h452||'</td><td>'||h453||'</td><td>'||h454||'</td><td>'||h455||'</td><td>'||h456||'</td><td>'||h457||'</td><td>'||h458||'</td><td>'||h459||'</td>'
+        '<td>'||h460||'</td><td>'||h461||'</td>'
+        '<tr><td>0.9-1.0</td><td>'||count1+6||'</td>'
+        '<td>'||j44||'</td><td>'||j45||'</td><td>'||j46||'</td><td>'||j47||'</td><td>'||j48||'</td><td>'||j49||'</td><td>'||j450||'</td><td>'||j451||'</td>'
+        '<td>'||j452||'</td><td>'||j453||'</td><td>'||j454||'</td><td>'||j455||'</td><td>'||j456||'</td><td>'||j457||'</td><td>'||j458||'</td><td>'||j459||'</td>'
+        '<td>'||j460||'</td><td>'||j461||'</td>'
+        '<tr><td>Всего</td><td>'||count1+7||'</td><td>'||coalesce(c44+d44+f44+g44+h44+j44,0)||'</td><td>'||coalesce(c45+d45+f45+g45+h45+j45,0)||'</td>'
+        '<td>'||coalesce(c46+d46+f46+g46+h46+j46,0)||'</td><td>'||coalesce(c47+d47+f47+g47+h47+j47,0)||'</td>'
+        '<td>'||coalesce(c48+d48+f48+g48+h48+j48,0)||'</td><td>'||coalesce(c49+d49+f49+g49+h49+j49,0)||'</td>'
+        '<td>'||coalesce(c450+d450+f450+g450+h450+j450,0)||'</td><td>'||coalesce(c451+d451+f451+g451+h451+j451,0)||'</td>'
+        '<td>'||coalesce(c452+d452+f452+g452+h452+j452,0)||'</td><td>'||coalesce(c453+d453+f453+g453+h453+j453,0)||'</td>'
+        '<td>'||coalesce(c454+d454+f454+g454+h454+j454,0)||'</td><td>'||coalesce(c455+d455+f455+g455+h455+j455,0)||'</td>'
+        '<td>'||coalesce(c456+d456+f456+g456+h456+j456,0)||'</td><td>'||coalesce(c457+d457+f457+g457+h457+j457,0)||'</td>'
+        '<td>'||coalesce(c458+d458+f458+g458+h458+j458,0)||'</td><td>'||coalesce(c459+d459+f459+g459+h459+j459,0)||'</td>'
+        '<td>'||coalesce(c460+d460+f460+g460+h460+j460,0)||'</td><td>'||coalesce(c461+d461+f461+g461+h461+j461,0)||'</td>'
+
+into row_4
+from (
+    select
+         coalesce(sum(count_1) filter(where t_8680 = 0.4),0) as c44
+        ,coalesce(sum(count_2) filter(where t_8680 = 0.4),0) as c45
+        ,coalesce(sum(count_3) filter(where t_8680 = 0.4),0) as c46
+        ,coalesce(sum(count_4) filter(where t_8680 = 0.4),0) as c47
+        ,coalesce(sum(count_5) filter(where t_8680 = 0.4),0) as c48
+        ,coalesce(sum(count_6) filter(where t_8680 = 0.4),0) as c49
+        ,coalesce(sum(count_7) filter(where t_8680 = 0.4),0) as c450
+        ,coalesce(sum(count_8) filter(where t_8680 = 0.4),0) as c451
+        ,coalesce(sum(count_9) filter(where t_8680 = 0.4),0) as c452
+        ,coalesce(sum(count_10) filter(where t_8680 = 0.4),0) as c453
+        ,coalesce(sum(count_11) filter(where t_8680 = 0.4),0) as c454
+        ,coalesce(sum(count_12) filter(where t_8680 = 0.4),0) as c455
+        ,coalesce(sum(count_13) filter(where t_8680 = 0.4),0) as c456
+        ,coalesce(sum(count_14) filter(where t_8680 = 0.4),0) as c457
+        ,coalesce(sum(count_15) filter(where t_8680 = 0.4),0) as c458
+        ,coalesce(sum(count_16) filter(where t_8680 = 0.4),0) as c459
+        ,coalesce(sum(count_17) filter(where t_8680 = 0.4),0) as c460
+        ,coalesce(sum(count_18) filter(where t_8680 = 0.4),0) as c461
+        ,coalesce(sum(count_1) filter(where t_8680 = 0.5),0) as d44
+        ,coalesce(sum(count_2) filter(where t_8680 = 0.5),0) as d45
+        ,coalesce(sum(count_3) filter(where t_8680 = 0.5),0) as d46
+        ,coalesce(sum(count_4) filter(where t_8680 = 0.5),0) as d47
+        ,coalesce(sum(count_5) filter(where t_8680 = 0.5),0) as d48
+        ,coalesce(sum(count_6) filter(where t_8680 = 0.5),0) as d49
+        ,coalesce(sum(count_7) filter(where t_8680 = 0.5),0) as d450
+        ,coalesce(sum(count_8) filter(where t_8680 = 0.5),0) as d451
+        ,coalesce(sum(count_9) filter(where t_8680 = 0.5),0) as d452
+        ,coalesce(sum(count_10) filter(where t_8680 = 0.5),0) as d453
+        ,coalesce(sum(count_11) filter(where t_8680 = 0.5),0) as d454
+        ,coalesce(sum(count_12) filter(where t_8680 = 0.5),0) as d455
+        ,coalesce(sum(count_13) filter(where t_8680 = 0.5),0) as d456
+        ,coalesce(sum(count_14) filter(where t_8680 = 0.5),0) as d457
+        ,coalesce(sum(count_15) filter(where t_8680 = 0.5),0) as d458
+        ,coalesce(sum(count_16) filter(where t_8680 = 0.5),0) as d459
+        ,coalesce(sum(count_17) filter(where t_8680 = 0.5),0) as d460
+        ,coalesce(sum(count_18) filter(where t_8680 = 0.5),0) as d461
+        ,coalesce(sum(count_1) filter(where t_8680 = 0.6),0) as f44
+        ,coalesce(sum(count_2) filter(where t_8680 = 0.6),0) as f45
+        ,coalesce(sum(count_3) filter(where t_8680 = 0.6),0) as f46
+        ,coalesce(sum(count_4) filter(where t_8680 = 0.6),0) as f47
+        ,coalesce(sum(count_5) filter(where t_8680 = 0.6),0) as f48
+        ,coalesce(sum(count_6) filter(where t_8680 = 0.6),0) as f49
+        ,coalesce(sum(count_7) filter(where t_8680 = 0.6),0) as f450
+        ,coalesce(sum(count_8) filter(where t_8680 = 0.6),0) as f451
+        ,coalesce(sum(count_9) filter(where t_8680 = 0.6),0) as f452
+        ,coalesce(sum(count_10) filter(where t_8680 = 0.6),0) as f453
+        ,coalesce(sum(count_11) filter(where t_8680 = 0.6),0) as f454
+        ,coalesce(sum(count_12) filter(where t_8680 = 0.6),0) as f455
+        ,coalesce(sum(count_13) filter(where t_8680 = 0.6),0) as f456
+        ,coalesce(sum(count_14) filter(where t_8680 = 0.6),0) as f457
+        ,coalesce(sum(count_15) filter(where t_8680 = 0.6),0) as f458
+        ,coalesce(sum(count_16) filter(where t_8680 = 0.6),0) as f459
+        ,coalesce(sum(count_17) filter(where t_8680 = 0.6),0) as f460
+        ,coalesce(sum(count_18) filter(where t_8680 = 0.6),0) as f461
+        ,coalesce(sum(count_1) filter(where t_8680 = 0.7),0) as g44
+        ,coalesce(sum(count_2) filter(where t_8680 = 0.7),0) as g45
+        ,coalesce(sum(count_3) filter(where t_8680 = 0.7),0) as g46
+        ,coalesce(sum(count_4) filter(where t_8680 = 0.7),0) as g47
+        ,coalesce(sum(count_5) filter(where t_8680 = 0.7),0) as g48
+        ,coalesce(sum(count_6) filter(where t_8680 = 0.7),0) as g49
+        ,coalesce(sum(count_7) filter(where t_8680 = 0.7),0) as g450
+        ,coalesce(sum(count_8) filter(where t_8680 = 0.7),0) as g451
+        ,coalesce(sum(count_9) filter(where t_8680 = 0.7),0) as g452
+        ,coalesce(sum(count_10) filter(where t_8680 = 0.7),0) as g453
+        ,coalesce(sum(count_11) filter(where t_8680 = 0.7),0) as g454
+        ,coalesce(sum(count_12) filter(where t_8680 = 0.7),0) as g455
+        ,coalesce(sum(count_13) filter(where t_8680 = 0.7),0) as g456
+        ,coalesce(sum(count_14) filter(where t_8680 = 0.7),0) as g457
+        ,coalesce(sum(count_15) filter(where t_8680 = 0.7),0) as g458
+        ,coalesce(sum(count_16) filter(where t_8680 = 0.7),0) as g459
+        ,coalesce(sum(count_17) filter(where t_8680 = 0.7),0) as g460
+        ,coalesce(sum(count_18) filter(where t_8680 = 0.7),0) as g461
+        ,coalesce(sum(count_1) filter(where t_8680 = 0.8),0) as h44
+        ,coalesce(sum(count_2) filter(where t_8680 = 0.8),0) as h45
+        ,coalesce(sum(count_3) filter(where t_8680 = 0.8),0) as h46
+        ,coalesce(sum(count_4) filter(where t_8680 = 0.8),0) as h47
+        ,coalesce(sum(count_5) filter(where t_8680 = 0.8),0) as h48
+        ,coalesce(sum(count_6) filter(where t_8680 = 0.8),0) as h49
+        ,coalesce(sum(count_7) filter(where t_8680 = 0.8),0) as h450
+        ,coalesce(sum(count_8) filter(where t_8680 = 0.8),0) as h451
+        ,coalesce(sum(count_9) filter(where t_8680 = 0.8),0) as h452
+        ,coalesce(sum(count_10) filter(where t_8680 = 0.8),0) as h453
+        ,coalesce(sum(count_11) filter(where t_8680 = 0.8),0) as h454
+        ,coalesce(sum(count_12) filter(where t_8680 = 0.8),0) as h455
+        ,coalesce(sum(count_13) filter(where t_8680 = 0.8),0) as h456
+        ,coalesce(sum(count_14) filter(where t_8680 = 0.8),0) as h457
+        ,coalesce(sum(count_15) filter(where t_8680 = 0.8),0) as h458
+        ,coalesce(sum(count_16) filter(where t_8680 = 0.8),0) as h459
+        ,coalesce(sum(count_17) filter(where t_8680 = 0.8),0) as h460
+        ,coalesce(sum(count_18) filter(where t_8680 = 0.8),0) as h461
+        ,coalesce(sum(count_1) filter(where t_8680 in(0.9,1.0)),0) as j44
+        ,coalesce(sum(count_2) filter(where t_8680 in(0.9,1.0)),0) as j45
+        ,coalesce(sum(count_3) filter(where t_8680 in(0.9,1.0)),0) as j46
+        ,coalesce(sum(count_4) filter(where t_8680 in(0.9,1.0)),0) as j47
+        ,coalesce(sum(count_5) filter(where t_8680 in(0.9,1.0)),0) as j48
+        ,coalesce(sum(count_6) filter(where t_8680 in(0.9,1.0)),0) as j49
+        ,coalesce(sum(count_7) filter(where t_8680 in(0.9,1.0)),0) as j450
+        ,coalesce(sum(count_8) filter(where t_8680 in(0.9,1.0)),0) as j451
+        ,coalesce(sum(count_9) filter(where t_8680 in(0.9,1.0)),0) as j452
+        ,coalesce(sum(count_10) filter(where t_8680 in(0.9,1.0)),0) as j453
+        ,coalesce(sum(count_11) filter(where t_8680 in(0.9,1.0)),0) as j454
+        ,coalesce(sum(count_12) filter(where t_8680 in(0.9,1.0)),0) as j455
+        ,coalesce(sum(count_13) filter(where t_8680 in(0.9,1.0)),0) as j456
+        ,coalesce(sum(count_14) filter(where t_8680 in(0.9,1.0)),0) as j457
+        ,coalesce(sum(count_15) filter(where t_8680 in(0.9,1.0)),0) as j458
+        ,coalesce(sum(count_16) filter(where t_8680 in(0.9,1.0)),0) as j459
+        ,coalesce(sum(count_17) filter(where t_8680 in(0.9,1.0)),0) as j460
+        ,coalesce(sum(count_18) filter(where t_8680 in(0.9,1.0)),0) as j461
+        from app_rest.forest_reestr
+        where t_8650 = val_text  and t_9989 is not null and t_8680 is not null
+)as d;
+
+    table_row:= table_row||row_4;
+
+
+    tabl:=tabl||table_row||'</body></table>';
+
+    res:=tabl;
+
+elsif params->>'act'= '1' then
+
+        val_text :=coalesce((params->>'val_text'),'Шатурское');
+                raise info 'отчет = %',params->>'act';
+        table_row:='';
+        tabl:='';
+        DROP TABLE IF EXISTs pg_temp.temp_forest_analyz;
+          CREATE TEMPORARY TABLE pg_temp.temp_forest_analyz (
+            forest_saved text,
+            cnt_all integer,
+            col1 integer,
+            col2 integer,
+            col3 integer,
+            col4 integer,
+            col5 integer,
+            col6 integer,
+            col7 integer,
+            col8 integer,
+            col9 integer,
+            col10 integer,
+            col11 integer,
+            col12 integer,
+            col13 integer,
+            col14 integer,
+            col15 integer,
+            col16 integer,
+            col17 integer,
+            col18 integer,
+            col19 integer,
+            col20 integer
+
+          )
+          WITH (oids = false) ON COMMIT DROP;
+          insert into pg_temp.temp_forest_analyz (forest_saved,
+            cnt_all,
+            col1,
+            col2,
+            col3,
+            col4,
+            col5,
+            col6,
+            col7,
+            col8,
+            col9,
+            col10,
+            col11,
+            col12,
+            col13,
+            col14,
+            col15,
+            col16,
+            col17,
+            col18,
+            col19,
+            col20)
+        select forest_saved,count(1) as cnt_all,
+            count(1) filter (where forest_category in ('лесные земли (искусственного происхождения)','лесные культуры')) as col1,
+            count(1) filter (where forest_category in ('лесные культуры')) as col2,
+            count(1) filter (where forest_category in ('несомкнувшиеся лесные культуры')) as col3,
+            count(1) filter (where forest_category in ('питомники и лесные плантации')) as col4,
+            count(1) filter (where forest_category in ('естественные редины')) as col5,
+            count(1) filter (where forest_category in ('гари')) as col6,
+            count(1) filter (where forest_category in ('погибшие насаждения')) as col7,
+            count(1) filter (where forest_category in ('вырубки')) as col8,
+            count(1) filter (where forest_category in ('прогалины, пустыри')) as col9,
+            count(1) filter (where forest_category in ('пашни')) as col10,
+            count(1) filter (where forest_category in ('сенокосы')) as col11,
+            count(1) filter (where forest_category in ('пастбища')) as col12,
+            count(1) filter (where forest_category in ('воды')) as col13,
+            count(1) filter (where forest_category in ('сады, тутовники, ягодники')) as col14,
+            count(1) filter (where forest_category in ('дороги, просеки')) as col15,
+            count(1) filter (where forest_category in ('усадьбы, объекты переработки заготовленной древесины и другой лесной продукции')) as col16,
+            count(1) filter (where forest_category in ('болота')) as col17,
+            count(1) filter (where forest_category in ('пески')) as col18,
+            count(1) filter (where forest_category in ('ледники')) as col19,
+            count(1) filter (where forest_category in ('прочие земли')) as col20
+
+        from (select id_forest,(select val_v from objtep where object_id=id_forest and tep_id=8667) as forest_saved,
+                        (select val_v from objtep where object_id=id_forest and tep_id=9955) as forest_category
+        from (select id as id_forest
+        from objects d
+        where object_Type_id=491
+        and exists (select 1 from objtep where object_id=d.id and tep_id=8614 and val_v in (val_text) )
+        ) les_info) les_full_info --limit 1000
+        where forest_saved is not null
+        and forest_category is not null
+        group by forest_saved;
+
+        tabl:=tabl||'<table class="table-hover">
+                <thead>
+                <tr><th rowspan="4">Виды лесов по целевому назначению</th>
+                <td rowspan="4">Общая площадь лесов</td>
+                <th align="center" colspan="11">Площадь лесных земель</th>
+                <th align="center" colspan="12">Площадь нелесных земель</th>
+                </tr>
+                <tr>
+                <td colspan="2" >занятые лесными насаждениями (покрытые лесной растительностью)</td>
+                <td colspan="8">не покрытых лесной растительностью</td>
+                <td rowspan="3">всего лесных земель</td>
+                <td rowspan="3">пашни</td>
+                <td rowspan="3">сенокосы</td>
+                <td rowspan="3">пастбища</td>
+                <td rowspan="3">воды</td>
+                <td rowspan="3">сады, тутовники, ягодники</td>
+                <td rowspan="3">дороги, просеки</td>
+                <td rowspan="3">усадьбы, объекты переработки заготовленной древесины и другой лесной продукции</td>
+                <td rowspan="3">болота</td>
+                <td rowspan="3">пески</td>
+                <td rowspan="3">ледники</td>
+                <td rowspan="3">прочие земли</td>
+                <td rowspan="3">всего нелесных земель</td>
+                </tr>
+                <tr>
+                <td rowspan="2">всего</td>
+                <td rowspan="2">в том числе лесные культуры</td>
+                <td  rowspan="2">несомкнувшиеся лесные культуры</td>
+                <td  rowspan="2">питомники и лесные плантации </td>
+                <td  rowspan="2">естественные редины</td>
+                <td colspan="5">земли, предназначенные для лесовосстановления (фонд лесовосстановления)</td>
+                </tr>
+                <tr>
+                <td>гари</td>
+                <td>погибшие насаждения</td>
+                <td>вырубки</td>
+                <td>прогалины, пустыри</td>
+                <td>итого</td>
+                </tr>
+                <tr>
+                <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td><td>15</td><td>16</td><td>17</td><td>18</td><td>19</td><td>20</td><td>21</td><td>22</td><td>23</td><td>24</td><td>25</td>
+                </tr></thead><body>
+                <tr><td><b>'||val_text||'</b></td><td colspan="24"></td></tr>';
+ select '<tr><td>'||col_name||'</td>
+        <td>'||sum_col1+sum_col2||'</td>
+        <td>'||sum_col1||'</td>
+        <td>'||sum_col2||'</td>
+        <td>'||sum_col3||'</td>
+        <td>'||sum_col4||'</td>
+        <td>'||sum_col5||'</td>
+        <td>'||sum_col6||'</td>
+        <td>'||sum_col7||'</td>
+        <td>'||sum_col8||'</td>
+        <td>'||sum_col9||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6+sum_col1+sum_col3+sum_col4+sum_col5||'</td>
+        <td>'||sum_col10||'</td>
+        <td>'||sum_col11||'</td>
+        <td>'||sum_col12||'</td>
+        <td>'||sum_col13||'</td>
+        <td>'||sum_col14||'</td>
+        <td>'||sum_col15||'</td>
+        <td>'||sum_col16||'</td>
+        <td>'||sum_col17||'</td>
+        <td>'||sum_col18||'</td>
+        <td>'||sum_col19||'</td>
+        <td>'||sum_col20||'</td>
+        <td>'||sum_col10+sum_col11+sum_col12+sum_col13+sum_col14+sum_col15+sum_col16+sum_col17+sum_col19+sum_col20||'</td>
+        </tr>'
+        into row
+        from (select 'Всего лесов:' as col_name,
+        sum(col1) as sum_col1,
+        sum(col2) as sum_col2,
+        sum(col3) as sum_col3,
+        sum(col4) as sum_col4,
+        sum(col5) as sum_col5,
+        sum(col6) as sum_col6,
+        sum(col7) as sum_col7,
+        sum(col8) as sum_col8,
+        sum(col9) as sum_col9,
+        sum(col10) as sum_col10,
+        sum(col11) as sum_col11,
+        sum(col12) as sum_col12,
+        sum(col13) as sum_col13,
+        sum(col14) as sum_col14,
+        sum(col15) as sum_col15,
+        sum(col16) as sum_col16,
+        sum(col17) as sum_col17,
+        sum(col18) as sum_col18,
+        sum(col19) as sum_col19,
+        sum(col20) as sum_col20
+
+        from pg_temp.temp_forest_analyz) sum_table;
+
+        table_row:=table_row||row;
+
+select '<tr><td>'||col_name||'</td>
+        <td>'||sum_col1+sum_col2||'</td>
+        <td>'||sum_col1||'</td>
+        <td>'||sum_col2||'</td>
+        <td>'||sum_col3||'</td>
+        <td>'||sum_col4||'</td>
+        <td>'||sum_col5||'</td>
+        <td>'||sum_col6||'</td>
+        <td>'||sum_col7||'</td>
+        <td>'||sum_col8||'</td>
+        <td>'||sum_col9||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6+sum_col1+sum_col3+sum_col4+sum_col5||'</td>
+        <td>'||sum_col10||'</td>
+        <td>'||sum_col11||'</td>
+        <td>'||sum_col12||'</td>
+        <td>'||sum_col13||'</td>
+        <td>'||sum_col14||'</td>
+        <td>'||sum_col15||'</td>
+        <td>'||sum_col16||'</td>
+        <td>'||sum_col17||'</td>
+        <td>'||sum_col18||'</td>
+        <td>'||sum_col19||'</td>
+        <td>'||sum_col20||'</td>
+        <td>'||sum_col10+sum_col11+sum_col12+sum_col13+sum_col14+sum_col15+sum_col16+sum_col17+sum_col19+sum_col20||'</td>
+        </tr>'
+        into row
+        from (select 'Защитные леса - всего:' as col_name,
+        sum(col1) as sum_col1,
+        sum(col2) as sum_col2,
+        sum(col3) as sum_col3,
+        sum(col4) as sum_col4,
+        sum(col5) as sum_col5,
+        sum(col6) as sum_col6,
+        sum(col7) as sum_col7,
+        sum(col8) as sum_col8,
+        sum(col9) as sum_col9,
+        sum(col10) as sum_col10,
+        sum(col11) as sum_col11,
+        sum(col12) as sum_col12,
+        sum(col13) as sum_col13,
+        sum(col14) as sum_col14,
+        sum(col15) as sum_col15,
+        sum(col16) as sum_col16,
+        sum(col17) as sum_col17,
+        sum(col18) as sum_col18,
+        sum(col19) as sum_col19,
+        sum(col20) as sum_col20
+
+        from pg_temp.temp_forest_analyz) sum_table;
+
+        table_row:=table_row||row;
+
+
+        if row is not null then
+            table_row:=table_row||'<tr><td>в том числе по категориям:</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+        end if;
+
+
+           select '<tr><td>'||col_name||'</td>
+        <td>'||sum_col1+sum_col2||'</td>
+        <td>'||sum_col1||'</td>
+        <td>'||sum_col2||'</td>
+        <td>'||sum_col3||'</td>
+        <td>'||sum_col4||'</td>
+        <td>'||sum_col5||'</td>
+        <td>'||sum_col6||'</td>
+        <td>'||sum_col7||'</td>
+        <td>'||sum_col8||'</td>
+        <td>'||sum_col9||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6+sum_col1+sum_col3+sum_col4+sum_col5||'</td>
+        <td>'||sum_col10||'</td>
+        <td>'||sum_col11||'</td>
+        <td>'||sum_col12||'</td>
+        <td>'||sum_col13||'</td>
+        <td>'||sum_col14||'</td>
+        <td>'||sum_col15||'</td>
+        <td>'||sum_col16||'</td>
+        <td>'||sum_col17||'</td>
+        <td>'||sum_col18||'</td>
+        <td>'||sum_col19||'</td>
+        <td>'||sum_col20||'</td>
+        <td>'||sum_col10+sum_col11+sum_col12+sum_col13+sum_col14+sum_col15+sum_col16+sum_col17+sum_col19+sum_col20||'</td>
+        </tr>'
+        into row
+        from (select 'в)Леса, выполняющие функции защиты природных и иных объектов - всего:' as col_name,
+        sum(col1) as sum_col1,
+        sum(col2) as sum_col2,
+        sum(col3) as sum_col3,
+        sum(col4) as sum_col4,
+        sum(col5) as sum_col5,
+        sum(col6) as sum_col6,
+        sum(col7) as sum_col7,
+        sum(col8) as sum_col8,
+        sum(col9) as sum_col9,
+        sum(col10) as sum_col10,
+        sum(col11) as sum_col11,
+        sum(col12) as sum_col12,
+        sum(col13) as sum_col13,
+        sum(col14) as sum_col14,
+        sum(col15) as sum_col15,
+        sum(col16) as sum_col16,
+        sum(col17) as sum_col17,
+        sum(col18) as sum_col18,
+        sum(col19) as sum_col19,
+        sum(col20) as sum_col20
+
+        from pg_temp.temp_forest_analyz
+        where forest_saved in ('Защитные полосы лесов, расположенные вдоль железнодорожных путей общего пользования, федеральных автомобильных дорог общего пользования, автомобильных дорог общего пользования, Находящихся в собственности субъектов Российской Федерации',
+            'Зеленые зоны','Лесопарковые зоны')) sum_table;
+
+
+        table_row:=table_row||coalesce(row,'');
+        if row is not null then
+            table_row:=table_row||'<tr><td>в том числе:</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+        end if;
+        for v in (select *
+            from pg_temp.temp_forest_analyz
+        where forest_saved in ('Защитные полосы лесов, расположенные вдоль железнодорожных путей общего пользования, федеральных автомобильных дорог общего пользования, автомобильных дорог общего пользования, Находящихся в собственности субъектов Российской Федерации',
+            'Зеленые зоны','Лесопарковые зоны'))
+        loop
+        table_row:=table_row||'<tr><td>'||v.forest_saved||'</td>
+                 <td>'||v.col1+v.col2||'</td>
+                <td>'||v.col1||'</td>
+                <td>'||v.col2||'</td>
+                <td>'||v.col3||'</td>
+                <td>'||v.col4||'</td>
+                <td>'||v.col5||'</td>
+                <td>'||v.col6||'</td>
+                <td>'||v.col7||'</td>
+                <td>'||v.col8||'</td>
+                <td>'||v.col9||'</td>
+                <td>'||v.col9+v.col8+v.col7+v.col6||'</td>
+                <td>'||v.col9+v.col8+v.col7+v.col6+v.col1+v.col3+v.col4+v.col5||'</td>
+                <td>'||v.col10||'</td>
+                <td>'||v.col11||'</td>
+                <td>'||v.col12||'</td>
+                <td>'||v.col13||'</td>
+                <td>'||v.col14||'</td>
+                <td>'||v.col15||'</td>
+                <td>'||v.col16||'</td>
+                <td>'||v.col17||'</td>
+                <td>'||v.col18||'</td>
+                <td>'||v.col19||'</td>
+                <td>'||v.col20||'</td>
+                <td>'||v.col10+v.col11+v.col12+v.col13+v.col14+v.col15+v.col16+v.col17+v.col19+v.col20||'</td>
+                </tr>';
+        end loop;
+
+           select '<tr><td>'||col_name||'</td>
+        <td>'||sum_col1+sum_col2||'</td>
+        <td>'||sum_col1||'</td>
+        <td>'||sum_col2||'</td>
+        <td>'||sum_col3||'</td>
+        <td>'||sum_col4||'</td>
+        <td>'||sum_col5||'</td>
+        <td>'||sum_col6||'</td>
+        <td>'||sum_col7||'</td>
+        <td>'||sum_col8||'</td>
+        <td>'||sum_col9||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6+sum_col1+sum_col3+sum_col4+sum_col5||'</td>
+        <td>'||sum_col10||'</td>
+        <td>'||sum_col11||'</td>
+        <td>'||sum_col12||'</td>
+        <td>'||sum_col13||'</td>
+        <td>'||sum_col14||'</td>
+        <td>'||sum_col15||'</td>
+        <td>'||sum_col16||'</td>
+        <td>'||sum_col17||'</td>
+        <td>'||sum_col18||'</td>
+        <td>'||sum_col19||'</td>
+        <td>'||sum_col20||'</td>
+        <td>'||sum_col10+sum_col11+sum_col12+sum_col13+sum_col14+sum_col15+sum_col16+sum_col17+sum_col19+sum_col20||'</td>
+        </tr>'
+        into row
+        from (select 'Ценные леса всего:' as col_name,
+        sum(col1) as sum_col1,
+        sum(col2) as sum_col2,
+        sum(col3) as sum_col3,
+        sum(col4) as sum_col4,
+        sum(col5) as sum_col5,
+        sum(col6) as sum_col6,
+        sum(col7) as sum_col7,
+        sum(col8) as sum_col8,
+        sum(col9) as sum_col9,
+        sum(col10) as sum_col10,
+        sum(col11) as sum_col11,
+        sum(col12) as sum_col12,
+        sum(col13) as sum_col13,
+        sum(col14) as sum_col14,
+        sum(col15) as sum_col15,
+        sum(col16) as sum_col16,
+        sum(col17) as sum_col17,
+        sum(col18) as sum_col18,
+        sum(col19) as sum_col19,
+        sum(col20) as sum_col20
+
+        from pg_temp.temp_forest_analyz
+        where forest_saved in ('Леса, имеющие научное или историческое значение')) sum_table;
+
+        table_row:=table_row||coalesce(row,'');
+        if row is not null then
+            table_row:=table_row||'<tr><td>в том числе:</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+        end if;
+        for v in (select *
+            from pg_temp.temp_forest_analyz
+        where forest_saved in ('Леса, имеющие научное или историческое значение'))
+        loop
+        table_row:=table_row||'<tr><td>'||v.forest_saved||'</td>
+                 <td>'||v.col1+v.col2||'</td>
+                <td>'||v.col1||'</td>
+                <td>'||v.col2||'</td>
+                <td>'||v.col3||'</td>
+                <td>'||v.col4||'</td>
+                <td>'||v.col5||'</td>
+                <td>'||v.col6||'</td>
+                <td>'||v.col7||'</td>
+                <td>'||v.col8||'</td>
+                <td>'||v.col9||'</td>
+                <td>'||v.col9+v.col8+v.col7+v.col6||'</td>
+                <td>'||v.col9+v.col8+v.col7+v.col6+v.col1+v.col3+v.col4+v.col5||'</td>
+                <td>'||v.col10||'</td>
+                <td>'||v.col11||'</td>
+                <td>'||v.col12||'</td>
+                <td>'||v.col13||'</td>
+                <td>'||v.col14||'</td>
+                <td>'||v.col15||'</td>
+                <td>'||v.col16||'</td>
+                <td>'||v.col17||'</td>
+                <td>'||v.col18||'</td>
+                <td>'||v.col19||'</td>
+                <td>'||v.col20||'</td>
+                <td>'||v.col10+v.col11+v.col12+v.col13+v.col14+v.col15+v.col16+v.col17+v.col19+v.col20||'</td>
+                </tr>';
+        end loop;
+    select '<tr><td>'||col_name||'</td>
+        <td>'||sum_col1+sum_col2||'</td>
+        <td>'||sum_col1||'</td>
+        <td>'||sum_col2||'</td>
+        <td>'||sum_col3||'</td>
+        <td>'||sum_col4||'</td>
+        <td>'||sum_col5||'</td>
+        <td>'||sum_col6||'</td>
+        <td>'||sum_col7||'</td>
+        <td>'||sum_col8||'</td>
+        <td>'||sum_col9||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6||'</td>
+        <td>'||sum_col9+sum_col8+sum_col7+sum_col6+sum_col1+sum_col3+sum_col4+sum_col5||'</td>
+        <td>'||sum_col10||'</td>
+        <td>'||sum_col11||'</td>
+        <td>'||sum_col12||'</td>
+        <td>'||sum_col13||'</td>
+        <td>'||sum_col14||'</td>
+        <td>'||sum_col15||'</td>
+        <td>'||sum_col16||'</td>
+        <td>'||sum_col17||'</td>
+        <td>'||sum_col18||'</td>
+        <td>'||sum_col19||'</td>
+        <td>'||sum_col20||'</td>
+        <td>'||sum_col10+sum_col11+sum_col12+sum_col13+sum_col14+sum_col15+sum_col16+sum_col17+sum_col19+sum_col20||'</td>
+        </tr>'
+        into row
+        from (select 'ВСЕГО ЛЕСОВ' as col_name,
+        sum(col1) as sum_col1,
+        sum(col2) as sum_col2,
+        sum(col3) as sum_col3,
+        sum(col4) as sum_col4,
+        sum(col5) as sum_col5,
+        sum(col6) as sum_col6,
+        sum(col7) as sum_col7,
+        sum(col8) as sum_col8,
+        sum(col9) as sum_col9,
+        sum(col10) as sum_col10,
+        sum(col11) as sum_col11,
+        sum(col12) as sum_col12,
+        sum(col13) as sum_col13,
+        sum(col14) as sum_col14,
+        sum(col15) as sum_col15,
+        sum(col16) as sum_col16,
+        sum(col17) as sum_col17,
+        sum(col18) as sum_col18,
+        sum(col19) as sum_col19,
+        sum(col20) as sum_col20
+
+        from pg_temp.temp_forest_analyz) sum_table;
+
+        table_row:=table_row||coalesce(row,'');
+
+
+        tabl:=tabl||table_row||'</body></table>';
+
+
+        res:=tabl;
+elsif params->>'act'= '7' then
+tabl:= '';
+
+
+
+        tabl:=tabl||'<p align="right">Приложение 6</br>к приказу Минприроды России </br>от 06.10.2016 № 514</p>
+        <p align="right">Форма № 6-ГЛР</p>
+        <h1>Сведения об особо защитных участках лесов (ОЗУ)</h1>
+        <h1>'||to_char(current_date, 'dd.mm.yyyy')||'</h1>
+<p>Наименование субъекта Российской Федерации   <b>Московская область</b></p>
+<p>Наименование лесничества (лесопарка) <u>'||val_text||'</u></p>
+<p>Наименование категории земель, на которой расположено лесничество (лесопарк) <u>Земли лесного фонда</u></p><table class="table-hover">
+                    <thead>
+                        <tr><th rowspan="2" align="center">Виды лесов по целевому назначению и категории</th>
+                        <th align="center" rowspan="2">Наименование ОЗУ </th>
+                        <th align="center" colspan = "4">Местоположение лесного участка</th>
+                        <th align="center" rowspan = "2">Площадь, га</th>
+                        </tr>
+                         <tr><th align="center">наименование участкового лесничества</th>
+                         <th align="center">наименование урочища *</th>
+                         <th align="center">номер лесного квартала</th>
+                         <th align="center">номер лесо-таксационного</th>
+                    </tr><tr><th align="center">1</th><th align="center">2</th><th align="center">3</th><th align="center">4</th>
+                    <th align="center">5</th><th align="center">6</th><th align="center">7</th>
+                    </tr>
+                    </thead>
+                    <body></body><tr><td colspan="6">Защитные (в том числе по категориям защитных лесов)</td></tr>';
+
+row:= '';
+table_row := '';
+select array_to_string(array_agg('<tr><td>'||coalesce(vi.val_8667,'')||'</td><td>'||coalesce(vi.val_9212,'')||'</td>
+<td>'||coalesce(vi.val_8615,'')||'</td><td></td>
+<td>'||coalesce(vi.val_8616,'')||'</td><td>'||coalesce(vi.val_8617,'')||'</td>
+<td>'||coalesce(vi.val_8668,'')||'</td></tr>'), '')
+into row
+from
+(
+select distinct p.val_v as val_8667,p1.val_v as val_9212, p2.val_v as val_8615, p3.val_v as val_8616, p4.val_v as val_8617 , p5.val_n::text as val_8668
+from app.objects s, app.objtep p,app.classifier_data d,app.classifier_data d1
+, app.objtep p1, app.objtep p2, app.objtep p3, app.objtep p4, app.objtep p5
+where s.object_type_id = 491 
+and exists(select 1 from app.objtep p where p.object_id = s.id and p.tep_id = 8614 and p.val_v = val_text)
+and exists(select 1 from app.objtep p  where p.object_id = s.id and p.tep_id = 9212 and lower(p.val_v) <>  'нет')
+ and d.class_id = 1188  and d.text = p.val_v
+and s.id = p.object_id
+and p.tep_id = 8667
+and s.id = p1.object_id
+and p1.tep_id = 9212
+and s.id = p2.object_id
+and p2.tep_id = 8615 and d1.class_id = 740 and p2.val_v = d1.text
+and s.id = p3.object_id
+and p3.tep_id = 8616
+and s.id = p4.object_id
+and p4.tep_id = 8617
+and s.id = p5.object_id
+and p5.tep_id = 8668 limit 50)vi;
+/*
+for v in(select distinct p.val_v as val_8667,p1.val_v as val_9212, p2.val_v as val_8615, p3.val_v as val_8616, p4.val_v as val_8617 , p5.val_n::text as val_8668
+from app.objects s, app.objtep p,app.classifier_data d,app.classifier_data d1
+, app.objtep p1, app.objtep p2, app.objtep p3, app.objtep p4, app.objtep p5
+where s.object_type_id = 491 
+and exists(select 1 from app.objtep p where p.object_id = s.id and p.tep_id = 8614 and p.val_v = val_text)
+and exists(select 1 from app.objtep p  where p.object_id = s.id and p.tep_id = 9212 and lower(p.val_v) <>  'нет')
+and d.class_id = 1188  and d.text = p.val_v
+and s.id = p.object_id
+and p.tep_id = 8667
+and s.id = p1.object_id
+and p1.tep_id = 9212
+and s.id = p2.object_id
+and p2.tep_id = 8615 and d1.class_id = 740 and p2.val_v = d1.text
+and s.id = p3.object_id
+and p3.tep_id = 8616
+and s.id = p4.object_id
+and p4.tep_id = 8617
+and s.id = p5.object_id
+and p5.tep_id = 8668)loop
+        i:=i+1;
+        table_row:= concat(table_row,'<tr><td>'||coalesce(v.val_8667,'')||'</td>');         
+        table_row:= concat(table_row,'<td>'||coalesce(v.val_9212,'')||'</td>'); 
+        table_row:= concat(table_row,'<td>'||coalesce(v.val_8615,'')||'</td>'); 
+        table_row:= concat(table_row,'<td></td>');  
+        table_row:= concat(table_row,'<td>'||coalesce(v.val_8616,'')||'</td>'); 
+        table_row:= concat(table_row,'<td>'||coalesce(v.val_8617,'')||'</td>'); 
+        table_row:= concat(table_row,'<td>'||coalesce(v.val_8668,'')||'</td></tr>');
+        if i=200 then 
+            i:=0;
+            table_row_part:=table_row_part||table_row;
+            table_row:='';
+        end if;     
+        if table_row<>'' then 
+                table_row_part:=table_row_part||table_row;
+                table_row:=table_row_part;  
+            else
+                table_row:=table_row_part;  
+            end if;     
+end loop;*/
+
+    table_row:= table_row||coalesce(row, '')||'<tr><td colspan="6">Эксплуатационные</td></tr>
+    <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td colspan="6">Резервные</td>
+    <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>Итог</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+
+    tabl:=tabl||table_row||'</body></table>';
+    res:=tabl;
+    
+
+elsif params->>'act'= '10' then
+
+
+    /*  val_text :=coalesce((params->>'val_text'),'Шатурское');--Шатурское
+        print := coalesce((params->>'print')::integer, 0);
+        row := '';
+        table_row:= '';
+        tabl:= '';
+        row_2 := '';
+
+        count:= 10;
+        count1:= 0;
+        res := '';
+*/
+
+    if print = 0 then
+        tabl:=tabl||'<a href="app.prc_reports_analyz.report_forest_main?act=' || 10 || '&print=1&forest_name='||val_text||'" target="_blank"><button><i class="fa fa-file-excel-o"></i> в Excel</button></a>';
+    end if;
+
+
+
+
+
+tabl:=tabl||'<h1>Форма № 10-ГЛР Характеристика противопожарного устройства лесов</h1>
+<p>Наименование субъекта Российской Федерации   <b>Московская область</b></p>
+<p>Наименование лесничества (лесопарка) <u>'||val_text||'</u></p>
+<p>Наименование категории земель, на которой расположено лесничество (лесопарк) <u>Земли лесного фонда</u></p>
+            <table class="table-hover">
+            <thead>
+                <tr><th rowspan="2" align="center">Наименование показателя противопожарного устройства лесов</th>
+                <th align="center" rowspan="2">Ед. изм. </th>
+                <th align="center" colspan = "2">Объем показателя</th>
+                </tr>
+                 <tr><th align="center"> по лесохозяйственному регламенту</th>
+                 <th align="center"> фактический</th>
+            </tr><tr><th align="center">1</th><th align="center">2</th><th align="center">3</th><th align="center">4</th></tr>
+            </thead>
+            <body>
+            <tr><td colspan = "4"><b>Московская область</b></td></tr>
+            <tr><td colspan = "4"><b>'||val_text||'</b></td></tr>';
+
+
+
+        select '<tr><td align="center">Количество лесничеств</td>
+            <td align="center">шт.</td>
+            <td align="center">1</td>
+            <td align="center">1</td></tr>
+            <tr><td align="center">Количество участковых лесничеств</td>
+            <td align="center">шт.</td>
+            <td align="center">'||d.lesn||'</td>
+            <td align="center">'||d.lesn||'</td></tr>'
+            into row
+            from
+            (
+                select count(distinct dt.text) as lesn
+                from app.classifier_data dt
+                where dt.class_id = 740
+                 and dt.text in(select distinct p.val_v
+                from app.objtep p, app.objects s
+                where p.object_id = s.id and s.object_type_id = 491 and p.tep_id = 8615
+                and exists(select 1 from app.objtep p where p.object_id = s.id and p.tep_id = 8614 and p.val_v = val_text))
+            )d;
+
+        table_row:= table_row||coalesce(row,'');
+
+    table_row:= table_row||'<tr><td align="center">Распределение общей площади земель по зонам мониторинга и районам применения сил и средств</td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td></tr>
+    <tr><td align="center">а) наземная зона мониторинга</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">б) зона авиационного мониторинга, район применения наземных сил и средств</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">в) зона авиационного мониторинга, район применения авиационных сил и средств</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">г) зона космического мониторинга 1-го уровня</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">д) зона космического мониторинга 2-го уровня</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">Количество искусственных водоемов и площадок для забора пожарными насосами из естественных водоемов</td>
+    <td align="center">шт.</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">Протяженность противопожарных  разрывов</td>
+    <td align="center">км</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">Протяженность лесных дорог противопожарного назначения</td>
+    <td align="center">км</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">Распределение площади земель по классам</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">природной пожарной опасности</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">1-й класс пожарной опасности</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">2-й класс пожарной опасности</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">3-й класс пожарной опасности</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">4-й класс пожарной опасности</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">5-й класс пожарной опасности</td>
+    <td align="center">га</td>
+    <td align="center"></td>
+    <td align="center"></td></tr>';
+    tabl:=tabl||table_row||'</body></table>';
+
+
+    res:=tabl;
+
+
+
+elsif params->>'act'= '12' then
+/*      itid:=coalesce((params->>'itid')::smallint,491); --491
+        tepid:=coalesce((params->>'tepid')::integer, 8615); --8615
+        val_text :=coalesce((params->>'val_text'),'Шатурское');--Шатурское
+
+        table_row:= '';
+        tabl:= '';
+        row_2 := '';
+        count:= 10;
+        count1:= 0;
+
+    print := coalesce((params->>'print')::integer, 0);*/
+    if print = 0 then
+        tabl:=tabl||'<a href="app.prc_reports_analyz.report_forest_main?act=' || 12 || '&print=1&forest_name='||val_text||'" target="_blank"><button><i class="fa fa-file-excel-o"></i> в Excel</button></a>';
+    end if;
+
+tabl:=tabl||'<h1>Форма № 12-ГЛР Распределение земель, не занятых лесными насаждениями (не покрытых лесной растительностью), и нелесных земель по способам лесовосстановления и лесоразведения</h1>
+<h2>на '||to_char(current_date, 'dd.mm.yyyy')||'</h2>
+<p style="font-size: 16pt;" >Наименование субъекта Российской Федерации    <u><b>Московская область</b></u></p>
+<p style="font-size: 16pt;">Наименование лесничества (лесопарка) <u> '||val_text||'</u></p>
+<p style="font-size: 16pt;">Наименование категории земель, на которой расположено лесничество (лесопарк)<u> Земли лесного фонда</u></p>
+<table class="table-hover">
+            <thead>
+            <tr><th rowspan="2" align="center">Показатели</th>
+            <th align="center" colspan = "5" >Площадь земель, предназначенных для лесовосстановления (фонд лесовосстановления)</th>
+            <th align="center" colspan = "4">Площадь нелесных земель</th>
+            </tr>
+            <tr><th align="center"> гари</th>
+            <th align="center">погибшие насаждения</th>
+            <th align="center">вырубки</th>
+            <th align="center">прогалины,    пустыри</th>
+            <th align="center">итого</th>
+            <th align="center">болота</th>
+            <th align="center">пески</th>
+            <th align="center">прочие</th>
+            <th align="center">итого</th>
+            </tr>
+
+    <tr>
+<th align="center">1</th><th align="center">2</th><th align="center">3</th><th align="center">4</th><th align="center">5</th><th align="center">6</th>
+<th align="center">7</th><th align="center">8</th><th align="center">9</th><th align="center">10</th>
+            </tr>
+            </thead>
+            <body><tr>
+                        <td colspan = "10"><h2>'||val_text||'</h2></td></tr>';
+
+        select '<tr><td align="center">1)Всего земель,  нуждающихся в лесовосстановлении и лесоразведении</td>
+            <td align="center">'||u.gar||'</td>
+            <td align="center">'||u.nacag||'</td>
+            <td align="center">'||u.lesos||'</td>
+            <td align="center">'||u.progalina||'</td>
+            <td align="center">'||u.sum_les||'</td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td></tr>'
+        into row
+        from
+        (select d.gar,
+         d.nacag,
+         d.lesos,
+         d.progalina,
+         (d.gar+ d.nacag+d.lesos+ d.progalina) as sum_les
+         from
+        (select sum(p.val_n) filter(where exists(select 1 from app.objtep t where t.object_id = p.object_id and t.tep_id = 9955 and t.val_v = 'Гарь')) as gar,
+                sum(p.val_n) filter(where exists(select 1 from app.objtep t where t.object_id = p.object_id and t.tep_id = 9955 and t.val_v = 'HАСАЖДЕHИЕ ПОГИБШЕЕ')) as nacag,
+                sum(p.val_n) filter(where exists(select 1 from app.objtep t where t.object_id = p.object_id and t.tep_id = 9955 and t.val_v in( 'Вырубка'))) as lesos,
+                sum(p.val_n) filter(where exists(select 1 from app.objtep t where t.object_id = p.object_id and t.tep_id = 9955 and t.val_v in( 'ПРОГАЛИНА'))) as progalina
+        from app.objtep p
+        where p.object_id in(select id from app.objects s where s.object_type_id = 491) and p.tep_id = 8668
+        and exists(select 1 from app.objtep t where t.tep_id = 8614 and t.object_id = p.object_id and t.val_v = val_text)
+        )d) u;
+
+/*<tr><td align="center">1)Всего земель,  нуждающихся в лесовосстановлении и лесоразведении</td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td>
+            <td align="center"></td></tr>*/
+    table_row:= table_row||coalesce(row,'');
+
+    table_row:= table_row||'
+    <tr><td align="center">в том числе:</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">а)земли,на которых обеспечивается естественное восстановление леса - всего:</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">из них:</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">хвойными древесными породами</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">твердолиственными древесными породами</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">б)земли, на которых восстановление леса хозяйственно-ценными  древесными породами может быть обеспечено путем содействия  естественному возобновлению</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">в том числе:</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">доступные для хозяйственного воздействия</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></t
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">земли, на которых проведены меры содействия естественному возобновлениюлеса, но возобновление главными древесными породами не закончено</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">в)земли, на которых восстановление леса может быть обеспечено только путем создания лесных культур, всего:</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">в том числе:</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">доступные для хозяйственного воздействия (лесокультурный фонд)</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">г)земли, на которых восстановление леса может быть обеспечено комбинированным способом, всего:</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">2)Земли, не подлежащие лесовосстановлению (места отдыха, для ландшафтных, охотничьих и других целей)</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>
+    <tr><td align="center">3)Лесные насаждения, нуждающиеся в реконструкции путем посадки или посева леса</td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td>
+    <td align="center"></td></tr>';
+
+
+
+
+
+
+
+    tabl:=tabl||table_row||'</body></table>';
+
+    res:=tabl;
+elsif params->>'act'= '4' then
+
+    if print = 0 then
+        tabl:=tabl||'<a href="app.prc_reports_analyz.report_forest_main?act=' || 4 || '&print=1&forest_name='||val_text||'" target="_blank"><button><i class="fa fa-file-excel-o"></i> в Excel</button></a>';
+    end if;
+
+    tabl:= '';
+
+
+
+    tabl:=tabl||'<p align="right">Приложение 4</br>
+                    к приказу Минприроды России </br>
+                    от 06.10.2016 № 514</p>
+        <p align="right">Форма № 4-ГЛР</p>
+        <h2 align="center">Характеристика лесничества (лесопарка)</h1>
+        <h2 align="center">на '||to_char(current_date, 'dd.mm.yyyy')||' года</h1>
+        <p align="center">Наименование субъекта Российской Федерации <b> Московская область</b></p>
+        <p align="center">Наименование лесничества (лесопарка)  <u>'||val_text||'</u></p>
+        <p align="center">Наименование категории земель, на которой расположено лесничество (лесопарк) <u>Земли лесного фонда</u></p><table class="table-hover">
+        <thead>
+            <tr>
+            <th align="center" rowspan = "3">Наименование субъекта</th>
+            <th align="center" rowspan = "3">Наименование лесничества</th>
+            <th align="center" rowspan = "3">Наименование участкового лесничества</th>
+            <th align="center" colspan = "4">Реквизиты приказов об установлении границ</br>лесничества и изменений, связанных с приложением координат</th>
+            <th align="center" rowspan = "3">Площадь, га</th>
+            <th align="center" rowspan = "3">Количество лесных кварталов, шт.</th>
+            <th align="center" rowspan = "3">Количество лесотакса-ционных выделов, шт.</th>
+            <th align="center" rowspan = "3">Кроме того площадь лесов,</br> 
+                    в отношении которых лесоустройство не проводилось, га</th>
+            </tr>
+             <tr><th align="center" colspan = "2">по материалам лесоустройства</th>
+             <th align="center" colspan = "2">в системе координат</th></tr>
+            <tr><th align="center">№</th><th align="center">дата</th><th align="center">№</th><th align="center">дата</th></tr>
+        </tr><tr><th align="center">1</th><th align="center">2</th><th align="center">3</th><th align="center">4</th>
+        <th align="center">5</th><th align="center">6</th><th align="center">7</th><th align="center">8</th>
+        <th align="center">9</th><th align="center">10</th><th align="center">11</th>
+        </tr>
+        </thead><tr>';
+        table_row:= '';
+        
+        select '<td>'||column1||'</td><td>'
+            ||column2||'</td><td>'
+            ||column3||'</td><td></td><td></td><td></td><td></td><td>'
+            ||column8||'</td><td>'
+            ||column9||'</td><td>'
+            ||column10||'</td><td></td></tr>'
+        into row
+        from(
+        select 'Московская область' as column1,
+                lesn as column2,
+                '' as column3,
+                round(sum(sum), 2) as column8, 
+                sum(dist_8616) as column9, 
+                sum(dist_8617)  as column10
+        from app_rest.forest_grl04
+        where lesn = val_text group by lesn order by lesn)le;
+
+        table_row:= table_row||coalesce(row, '');
+
+
+        select array_to_string(array_agg('<td></td><td></td><td>'
+            ||column3||'</td><td></td><td></td><td></td><td></td><td>'
+            ||column8||'</td><td>'
+            ||column9||'</td><td>'
+            ||column10||'</td><td></td>'), '</tr><tr>')
+        into row
+        from(
+        select 
+                landlesn as column3,
+                round(sum, 2) as column8, 
+                dist_8616 as column9, 
+                dist_8617  as column10
+        from app_rest.forest_grl04
+        where lesn = val_text)le;
+        table_row:= table_row||coalesce(row, '');
+    tabl:=tabl||table_row||'</body></table>';
+
+    res:=tabl;
+else
+        tabl:='<table class="table-hover">
+                        <thead>
+                        <tr><th>Параметр act задан неверно</th></tr></thead>';
+        res:=tabl;
+end if;
+
+    return res;
+    EXCEPTION WHEN others then
+        tabl:='<table class="table-hover">
+                        <thead>
+                        <tr><th>Ошибка формирования отчета</th></tr></thead>';
+    res:=tabl;
+    return res;
 end;
 $function$
 ;
